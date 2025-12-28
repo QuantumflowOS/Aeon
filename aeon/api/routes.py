@@ -55,3 +55,16 @@ loop = AutonomousLoop(agent, pm)
 @router.post("/agent/goal")
 def run_goal(goal: str):
     return {"results": loop.run_goal(goal)}
+
+@router.get("/system/health")
+def system_health():
+    return {
+        "protocols": [
+            {
+                "name": p.name,
+                "reward": p.reward,
+                "executions": p.executions
+            }
+            for p in pm.protocols
+        ]
+    }
