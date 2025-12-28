@@ -1,7 +1,8 @@
-import time
 from aeon.agents.planner import PlannerAgent
 from aeon.agents.executor import ExecutorAgent
 from aeon.agents.reflector import ReflectorAgent
+from aeon.core.improver import SelfImprover
+import time
 
 
 class AutonomousLoop:
@@ -11,6 +12,7 @@ class AutonomousLoop:
         self.planner = PlannerAgent()
         self.executor = ExecutorAgent(agent)
         self.reflector = ReflectorAgent()
+        self.improver = SelfImprover(protocol_manager)
 
     def run_goal(self, goal: str, delay=1):
         steps = self.planner.plan(goal)
@@ -20,7 +22,7 @@ class AutonomousLoop:
             result = self.executor.execute_step(step)
             protocol = self.pm.best(self.agent.context)
 
-            success = "No protocol" not in result
+            success = protocol is not None
             self.reflector.reflect(protocol, success)
 
             results.append({
@@ -31,4 +33,10 @@ class AutonomousLoop:
 
             time.sleep(delay)
 
-        return results
+        improvement_report = self.improver.improve()
+
+        return {
+            "goal": goal,
+            "steps": results,
+            "self_improvement": improvement_report
+        }
