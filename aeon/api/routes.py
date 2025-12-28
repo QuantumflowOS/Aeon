@@ -44,7 +44,14 @@ def run_agent():
         "action": action.strip()
     }
 
-
 @router.get("/memory")
 def get_memory():
     return {"sessions": memory.sessions}
+
+from aeon.core.loop import AutonomousLoop
+
+loop = AutonomousLoop(agent, pm)
+
+@router.post("/agent/goal")
+def run_goal(goal: str):
+    return {"results": loop.run_goal(goal)}
