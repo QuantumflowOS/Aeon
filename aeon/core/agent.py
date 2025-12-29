@@ -1,26 +1,21 @@
-from aeon.core.cognition import CognitionEngine
+from aeon.memory.episodic import EpisodicMemory
+from aeon.memory.semantic import SemanticMemory
 
 class Agent:
-    def __init__(self, context, protocol_manager, memory):
+    def __init__(self, context, protocol_manager):
         self.context = context
         self.pm = protocol_manager
-        self.memory = memory
-        self.cognition = CognitionEngine()
+        self.episodic = EpisodicMemory()
+        self.semantic = SemanticMemory()
 
     def run(self):
-        thought = self.cognition.think(self.context)
-
         protocol = self.pm.best(self.context)
         if protocol:
-            response = protocol.execute(self.context)
+            action = protocol.execute(self.context)
         else:
-            response = "No protocol matched. Default support engaged."
+            action = "Default support engaged."
 
-        self.memory.store(self.context)
+        self.episodic.store(self.context, action)
+        self.semantic.add(action)
 
-        return f"""🧠 Thought:
-{thought}
-
-🤖 Action:
-{response}
-"""
+        return action
