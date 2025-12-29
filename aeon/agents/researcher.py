@@ -1,10 +1,10 @@
 class ResearchAgent:
-    """
-    Observes system behavior and extracts insights.
-    """
-
     def analyze(self, protocols):
-        report = []
+        return {
+            "mean_reward": sum(p.reward for p in protocols) / len(protocols),
+            "variance": sum((p.reward - 3)**2 for p in protocols),
+            "protocol_count": len(protocols)
+        }
 
         for p in protocols:
             report.append({
