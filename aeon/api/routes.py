@@ -1,69 +1,195 @@
-from fastapi import APIRouter
-from aeon.core.context import Context
-from aeon.core.protocol_manager import ProtocolManager
-from aeon.core.protocol import Protocol
-from aeon.core.memory import Memory
+# aeon/api/routes.py
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
 from aeon.core.agent import Agent
-
+from aeon.core.context import Context
+from aeon.core.protocol import Protocol
+from aeon.core.protocol_manager import ProtocolManager
+from aeon.core.semantic_memory import SemanticMemory
+from aeon.core.memory import Memory
 from aeon.protocols.emotional import happy, sad, create, comfort
 from aeon.protocols.productivity import focused, focus_action
-from aeon.api.schemas import ContextUpdate, AgentResponse
 
 router = APIRouter()
 
-# --- GLOBAL SINGLETONS (intentional for now) ---
+# Initialize global components
 context = Context()
+protocol_manager = ProtocolManager()
+semantic_memory = SemanticMemory()
 memory = Memory()
-pm = ProtocolManager()
 
-pm.register(Protocol("Happy", happy, create, 3))
-pm.register(Protocol("Sad", sad, comfort, 2))
-pm.register(Protocol("Focus", focused, focus_action, 3))
+# Register default protocols
+protocol_manager.register(Protocol("Happy", happy, create, 3.0))
+protocol_manager.register(Protocol("Sad", sad, comfort, 2.0))
+protocol_manager.register(Protocol("Focus", focused, focus_action, 3.0))
 
-agent = Agent(context, pm, memory)
+# Initialize agent
+agent = Agent(
+    context=context,
+    protocol_manager=protocol_manager,
+    semantic=semantic_memory,
+    memory=memory
+)
 
-# -------- ROUTES --------
+
+class ContextUpdateRequest(BaseModel):
+    emotion: str = None
+    intent: str = None
+    environment: str = None
+
+
+class GoalRequest(BaseModel):
+    goal: str
+
 
 @router.post("/context/update")
-def update_context(update: ContextUpdate):
-    context.update(
-        emotion=update.emotion,
-        intent=update.intent,
-        environment=update.environment
-    )
-    return {"status": "context updated", "context": context.to_dict()}
+async def update_context(request: ContextUpdateRequest):
+    """
+    Update agent context from JSON body and store automatically in memory.
+    """
+    try:
+        data = request.dict(exclude_none=True)
+        
+        # Update context object
+        context.update(**data)
+        
+        # Update agent's context reference
+        result = agent.update_context(data)
+        
+        return {
+            "status": "success",
+            "message": "Context updated successfully",
+            "context": context.to_dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/agent/run", response_model=AgentResponse)
-def run_agent():
-    result = agent.run()
+@router.post("/agent/run")
+async def run_agent():
+    """
+    Execute the agent's main loop with current context.
+    """
+    try:
+        result = agent.run()
+        return {
+            "status": "success",
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    thought, action = result.split("🤖 Action:")
-    return {
-        "thought": thought.replace("🧠 Thought:", "").strip(),
-        "action": action.strip()
-    }
-
-@router.get("/memory")
-def get_memory():
-    return {"sessions": memory.sessions}
-
-from aeon.core.loop import AutonomousLoop
-
-loop = AutonomousLoop(agent, pm)
 
 @router.post("/agent/goal")
-def run_goal(goal: str):
-    return {"results": loop.run_goal(goal)}
+async def run_goal(request: GoalRequest):
+    """
+    Execute a goal using semantic memory and protocols.
+    """
+    try:
+        result = agent.run_goal(request.goal)
+        return {
+            "status": "success",
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/memory")
+async def get_memory():
+    """
+    Retrieve all memory entries (semantic and episodic).
+    """
+    try:
+        mem_data = agent.memory.dump() if agent.memory else {}
+        semantic_data = agent.semantic.all_memory() if hasattr(agent.semantic, 'all_memory') else []
+        
+        return {
+            "status": "success",
+            "memory": {
+                "semantic": semantic_data,
+                "episodic": mem_data.get("episodic", []),
+                "internal_semantic": mem_data.get("semantic", [])
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/system/health")
-def system_health():
-    return {
-        "protocols": [
-            {
-                "name": p.name,
-                "reward": p.reward,
-                "executions": p.executions
+async def system_health():
+    """
+    Get system health and statistics.
+    """
+    try:
+        protocols = agent.protocol_manager.protocols
+        
+        # Handle both dict and list protocol storage
+        if isinstance(protocols, dict):
+            protocol_count = len(protocols)
+            protocol_list = [
+                {
+                    "name": name,
+                    "reward": data.get("reward", 0),
+                    "executions": data.get("executions", 0)
+                }
+                for name, data in protocols.items()
+            ]
+        else:
+            protocol_count = len(protocols)
+            protocol_list = [
+                {
+                    "name": p.name,
+                    "reward": p.reward,
+                    "executions": p.executions
+                }
+                for p in protocols
+            ]
+        
+        return {
+            "status": "healthy",
+            "protocols": protocol_list,
+            "protocol_count": protocol_count,
+            "context": context.to_dict(),
+            "memory_items": len(agent.memory.episodic) if agent.memory else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/protocols")
+async def get_protocols():
+    """
+    List all registered protocols.
+    """
+    try:
+        protocols = agent.protocol_manager.protocols
+        
+        if isinstance(protocols, dict):
+            protocol_list = [
+                {
+                    "name": name,
+                    "reward": data.get("reward", 0),
+                    "executions": data.get("executions", 0)
+                }
+                for name, data in protocols.items()
+            ]
+        else:
+            protocol_list = [
+                {
+                    "name": p.name,
+                    "reward": p.reward,
+                    "executions": p.executions
+                }
+                for p in protocols
+            ]
+        
+        return {
+            "status": "success",
+            "protocols": protocol_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))                "executions": p.executions
             }
             for p in pm.protocols
         ]
