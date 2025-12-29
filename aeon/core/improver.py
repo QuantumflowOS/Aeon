@@ -1,6 +1,11 @@
 from aeon.core.evaluator import Evaluator
 import logging
+from aeon.core.evolution import ProtocolEvolution
 
+self.evolver = ProtocolEvolution()
+mutants = self.evolver.evolve(self.pm.protocols)
+for m in mutants:
+    self.pm.register(m)
 
 class SelfImprover:
     """
