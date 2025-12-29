@@ -1,7 +1,10 @@
-import tkinter as tk
-from aeon.ui.gui import AEONGUI
+from aeon.core.registry import AEONRegistry
+from aeon.api.main import app
+
+def boot():
+    registry = AEONRegistry()
+    return registry, app
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    AEONGUI(root)
-    root.mainloop()
+    registry, _ = boot()
+    print("AEON platform booted.")
