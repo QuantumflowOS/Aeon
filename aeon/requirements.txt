@@ -1,4 +1,4 @@
-pip install --upgrade streamlit
+pip>=23.3
 # Core dependencies
 fastapi==0.104.1
 uvicorn==0.24.0
