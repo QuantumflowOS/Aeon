@@ -1,5 +1,3 @@
-python -m pip install --upgrade pip
-
 from aeon.core.registry import AEONRegistry
 from aeon.api.main import app
 
